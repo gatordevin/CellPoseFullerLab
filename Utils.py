@@ -5,6 +5,9 @@ from math import floor, ceil
 import numpy as np
 from matplotlib import pyplot as plt
 from read_roi import read_roi_file, read_roi_zip
+import numpy as np
+import matplotlib.pyplot as plt
+import cv2
 
 def tile_image(img, shape, overlap_percentage):
     x_points = [0]
@@ -72,7 +75,22 @@ def open_images_and_masks(file_dir, image_ext=[".tiff",".tif"]):
             image = readAndStandardize(image_path)
             image_mask_set.append((image, roi))
     return image_mask_set
-            
+
+def mask_to_countour(mask):
+    print(mask.shape)
+
+def contour_to_mask(mask_shape, polygons):
+    mask_image = np.zeros(mask_shape)
+    polygons = [np.array(polygon) for polygon in polygons]
+    value = []
+    if(len(mask_shape)>2):
+        for i in range(mask_shape[2]):
+            value.append(1)
+    else:
+        value = 1
+    cv2.fillPoly(mask_image, polygons, value)
+    return mask_image
+
 def generateCrops(file_dir, save_dir, crop_size, save_images=True):
     os.makedirs(save_dir, exist_ok=True)
     for file_name in os.listdir(file_dir):
