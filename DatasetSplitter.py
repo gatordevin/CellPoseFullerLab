@@ -1,8 +1,10 @@
+from zipfile import BadZipFile
 from skimage.io import imread, imsave
 import os
 from math import floor, ceil
 import numpy as np
 from matplotlib import pyplot as plt
+from read_roi import read_roi_file, read_roi_zip
 
 def tile_image(img, shape, overlap_percentage):
     x_points = [0]
@@ -48,6 +50,29 @@ def readAndStandardize(file_path):
         image = np.transpose(image, (1,2,0))
     return image
 
+def open_images_and_masks(file_dir, image_ext=[".tiff",".tif"]):
+    image_mask_set = []
+    file_names = os.listdir(file_dir)
+    for file_name in file_names:
+        if(file_name.endswith(tuple(image_ext))):
+            file_ext = "." + file_name.split(".")[-1]
+            image_path = file_dir + "/" + file_name
+            roi = None
+            mask_name = file_name.replace(file_ext, "_Mask.roi")
+            if(mask_name in file_names):
+                roi = read_roi_file(file_dir + "/" + mask_name)
+            else:
+                mask_name = file_name.replace(file_ext, "_Mask.zip")
+                if(mask_name in file_names):
+                    try:
+                        roi = dict(read_roi_zip(file_dir + "/" + mask_name))
+                    except BadZipFile:
+                        roi = None
+                        print("ROI file is not a zip file please remask: " + file_dir + "/" + mask_name)
+            image = readAndStandardize(image_path)
+            image_mask_set.append((image, roi))
+    return image_mask_set
+            
 def generateCrops(file_dir, save_dir, crop_size, save_images=True):
     os.makedirs(save_dir, exist_ok=True)
     for file_name in os.listdir(file_dir):
