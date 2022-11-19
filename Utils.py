@@ -1,5 +1,6 @@
 from zipfile import BadZipFile
 from skimage.io import imread, imsave
+from skimage.util import img_as_ubyte
 import os
 from math import floor, ceil
 import numpy as np
@@ -8,6 +9,8 @@ from read_roi import read_roi_file, read_roi_zip
 import numpy as np
 import matplotlib.pyplot as plt
 import cv2
+from skimage import measure
+from skimage import io
 
 def tile_image(img, shape, overlap_percentage):
     x_points = [0]
@@ -44,14 +47,48 @@ def tile_image(img, shape, overlap_percentage):
             splits.append([split, (i, j)])
     return splits
 
-def readAndStandardize(file_path):
-    image = imread(file_path)
+def standardizeImage(image):
     if(len(image.shape)==2):
         image = np.dstack([image])
     
     if(image.shape[0]<4):
         image = np.transpose(image, (1,2,0))
+
+    if(image.shape[-1]==2):
+        empty_img = np.zeros(image[:,:,0].shape)
+        image = np.dstack([image, empty_img])
     return image
+
+def maskImage(grayscale_mask, image):
+    mask = grayscale_mask
+    if(len(image.shape)>2):
+        image_stack = []
+        for i in range(image.shape[2]):
+            image_stack.append(grayscale_mask)
+        mask = np.dstack(image_stack)
+    masked_image = image * mask
+    return masked_image
+
+def readAndStandardize(file_path):
+    image = imread(file_path)
+    image = standardizeImage(image)
+    
+    return image
+
+def grayscale_to_seg_array(grayscale_mask):
+    contours = []
+    for pixel_val in np.unique(grayscale_mask)[1:]:
+        single_seg_mask = np.where(grayscale_mask == pixel_val, 1, 0)
+        c = measure.find_contours(single_seg_mask)
+        contours.append(c)
+
+    contours = [contour[0] for contour in contours]
+    return contours
+
+def get_mask_number(grayscale_mask):
+    # print(np.unique(grayscale_mask))
+    num_of_mask = len(np.unique(grayscale_mask)[1:])
+    return num_of_mask
 
 def open_images_and_masks(file_dir, image_ext=[".tiff",".tif"]):
     image_mask_set = []
@@ -73,21 +110,16 @@ def open_images_and_masks(file_dir, image_ext=[".tiff",".tif"]):
                         roi = None
                         print("ROI file is not a zip file please remask: " + file_dir + "/" + mask_name)
             image = readAndStandardize(image_path)
-            image_mask_set.append((image, roi))
+            image_mask_set.append((image, roi, file_name.replace(file_ext, "")))
     return image_mask_set
 
 def mask_to_countour(mask):
     print(mask.shape)
 
 def contour_to_mask(mask_shape, polygons):
-    mask_image = np.zeros(mask_shape)
+    mask_image = np.zeros(mask_shape, dtype=np.uint8)
     polygons = [np.array(polygon) for polygon in polygons]
-    value = []
-    if(len(mask_shape)>2):
-        for i in range(mask_shape[2]):
-            value.append(1)
-    else:
-        value = 1
+    value = 1
     cv2.fillPoly(mask_image, polygons, value)
     return mask_image
 

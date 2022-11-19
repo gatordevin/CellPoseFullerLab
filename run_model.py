@@ -1,10 +1,16 @@
-from Utils import open_images_and_masks, mask_to_countour, contour_to_mask
+from Utils import open_images_and_masks, mask_to_countour, contour_to_mask, standardizeImage, maskImage, get_mask_number
 from matplotlib import pyplot as plt
 from cellpose import models, core
 from cellpose.io import logger_setup
 from cellpose import plot
 import numpy as np
 import cv2
+from skimage import measure
+from cellpose import io
+from skimage.io import imsave
+import os
+import json
+from imageio import imwrite
 
 file_dir = "C:/Users/gator/OneDrive - University of Florida/10x images for quantification/Manual Counts copy/TO TEST CODE"
 save_dir = file_dir + "/model_output"
@@ -14,11 +20,12 @@ batch_size = 4
 
 use_GPU = core.use_gpu()
 logger_setup()
+os.makedirs(save_dir, exist_ok=True)
 
 model = models.CellposeModel(gpu=use_GPU, pretrained_model=model_path)
 
 image_mask_pairs = open_images_and_masks(file_dir)
-for image, mask in image_mask_pairs:
+for image, mask, file_name in image_mask_pairs:
     masks, flows, styles = model.eval([image], diameter=12, flow_threshold=1.0, channels=[0,0], cellprob_threshold=-3)
     seg_mask = masks[0]
 
@@ -27,14 +34,30 @@ for image, mask in image_mask_pairs:
         polygon = [list(zip(value["x"],value["y"]))]
         polygons.append(polygon)
     mask_image = contour_to_mask(image.shape[0:2], polygons)
+    mask_image = standardizeImage(mask_image)
 
-    masked_segs = seg_mask * mask_image
-    for pixel_val in np.unique(masked_segs)[1:]:
-        single_seg_mask = np.where(masked_segs == pixel_val, True, False)
-        
     
-    plt.imshow(masked_segs)
+    masked_seg_image = standardizeImage(seg_mask)
+    masked_seg_image = maskImage(mask_image, masked_seg_image)
+    num_of_mask = get_mask_number(masked_seg_image)
+
+    flow_image = standardizeImage(flows[0][0])
+    flow_image = maskImage(mask_image, flow_image)
+
+    prob_image = standardizeImage(flows[0][1][0]) #[:,:,0]
+    prob_image = maskImage(mask_image, prob_image)
+
+    plt.imshow(mask_image)
+    # plt.imshow(masked_seg_image, alpha=0.3)
     plt.show()
+
+    imwrite(save_dir + "/" + file_name + ".tif", image)
+    imwrite(save_dir + "/" + file_name + "_cell_mask.png", masked_seg_image)
+    imwrite(save_dir + "/" + file_name + "_cell_flow.png", flow_image)
+    imwrite(save_dir + "/" + file_name + "_cell_prob.tiff", prob_image)
+
+    with open(save_dir + "/" + file_name + "_cell_count.json", "w") as outfile:
+        json.dump({"cell_count": num_of_mask}, outfile)
 
 # images = []
 # for idx, cropped_image in enumerate(generateCrops(file_dir, save_dir, crop_size, False)):
