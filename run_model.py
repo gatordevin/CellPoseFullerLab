@@ -13,8 +13,8 @@ import json
 from imageio import imwrite
 from time import monotonic
 
-file_dir = "C:/Users/gator/OneDrive - University of Florida/10x images for quantification/Coding/Second Round of Testing"
-save_dir = file_dir + "/model_output"
+file_dir = "C:/Users/gator/OneDrive - University of Florida/10x images for quantification/Coding/TO TEST CODE"
+save_dir = file_dir + "/model_output_prob2"
 
 model_path = "C:/Users/gator/OneDrive - University of Florida/10x images for quantification/Coding/CellPoseTesting/split/models/CP_20221116_160410"
 batch_size = 4
@@ -27,7 +27,7 @@ model = models.CellposeModel(gpu=use_GPU, pretrained_model=model_path)
 
 image_mask_pairs = open_images_and_masks(file_dir)
 for image, mask, file_name in image_mask_pairs:
-    masks, flows, styles = model.eval([image], diameter=12, flow_threshold=1.0, channels=[0,0], cellprob_threshold=-3)
+    masks, flows, styles = model.eval([image], diameter=12, flow_threshold=1.0, channels=[0,0], cellprob_threshold=-2)
     seg_mask = masks[0]
 
     polygons = []
