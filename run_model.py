@@ -21,7 +21,6 @@ batch_size = 4
 
 use_GPU = core.use_gpu()
 logger_setup()
-os.makedirs(save_dir, exist_ok=True)
 
 model = models.CellposeModel(gpu=use_GPU, pretrained_model=model_path)
 params = [
@@ -39,7 +38,8 @@ params = [
     [12, 0.7, -3.0],
 ]
 for param in params:
-    save_dir = file_dir + "/model_output_" + str(param[0]) + "_" + str(param[1]) + "_" + str(param[2])
+    save_dir = file_dir + "/model_output_" + str(param[0]) + "_" + str(int(param[1]*10)) + "_" + str(int(param[2]*10))
+    os.makedirs(save_dir, exist_ok=True)
     image_mask_pairs = open_images_and_masks(file_dir)
     for image, mask, file_name in image_mask_pairs:
         masks, flows, styles = model.eval([image], diameter=param[0], flow_threshold=param[1], channels=[0,0], cellprob_threshold=param[2])
