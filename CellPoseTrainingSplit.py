@@ -3,10 +3,11 @@ import os
 from math import floor, ceil
 import numpy as np
 from matplotlib import pyplot as plt
+import cellpose
 
 file_dir = "C:/Users/gator/OneDrive - University of Florida/10x images for quantification/Manual Counts copy/CellPoseTesting"
-save_dir = file_dir + "/split"
-crop_size = (300,300)
+save_dir = file_dir + "/split_448"
+crop_size = (448,448)
 
 os.makedirs(save_dir, exist_ok=True)
 
