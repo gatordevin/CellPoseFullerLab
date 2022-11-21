@@ -1,4 +1,4 @@
-from Utils import open_images_and_masks, mask_to_countour, contour_to_mask, standardizeImage, maskImage, get_mask_number
+from Utils import open_images_and_masks, mask_to_countour, contour_to_mask, standardizeImage, maskImage, get_mask_number, mask_to_dots_image, dots_image_to_density
 from matplotlib import pyplot as plt
 from cellpose import models, core
 from cellpose.io import logger_setup
@@ -11,11 +11,12 @@ from skimage.io import imsave
 import os
 import json
 from imageio import imwrite
+from time import monotonic
 
-file_dir = "C:/Users/gator/OneDrive - University of Florida/10x images for quantification/Manual Counts copy/TO TEST CODE"
+file_dir = "C:/Users/gator/OneDrive - University of Florida/10x images for quantification/Coding/Second Round of Testing"
 save_dir = file_dir + "/model_output"
 
-model_path = "C:/Users/gator/OneDrive - University of Florida/10x images for quantification/Manual Counts copy/CellPoseTesting/split/models/CP_20221116_160410"
+model_path = "C:/Users/gator/OneDrive - University of Florida/10x images for quantification/Coding/CellPoseTesting/split/models/CP_20221116_160410"
 batch_size = 4
 
 use_GPU = core.use_gpu()
@@ -35,7 +36,6 @@ for image, mask, file_name in image_mask_pairs:
         polygons.append(polygon)
     mask_image = contour_to_mask(image.shape[0:2], polygons)
     mask_image = standardizeImage(mask_image)
-
     
     masked_seg_image = standardizeImage(seg_mask)
     masked_seg_image = maskImage(mask_image, masked_seg_image)
@@ -43,18 +43,33 @@ for image, mask, file_name in image_mask_pairs:
 
     flow_image = standardizeImage(flows[0][0])
     flow_image = maskImage(mask_image, flow_image)
+    print(flow_image.dtype)
 
     prob_image = standardizeImage(flows[0][1][0]) #[:,:,0]
     prob_image = maskImage(mask_image, prob_image)
+    print(prob_image.dtype)
 
-    plt.imshow(mask_image)
-    # plt.imshow(masked_seg_image, alpha=0.3)
-    plt.show()
+    dots = mask_to_dots_image(masked_seg_image)
+    dots_image = standardizeImage(dots)
+    print(dots_image.dtype)
+    density_image = dots_image_to_density(dots, 35)
+    density_image = standardizeImage(density_image, force_uint8=True)
 
-    imwrite(save_dir + "/" + file_name + ".tif", image)
+    density_image_color = cv2.cvtColor(cv2.applyColorMap(density_image, cv2.COLORMAP_HOT), cv2.COLOR_BGR2RGB)
+
+    density_overlay_image = cv2.addWeighted(image, 0.85, density_image_color, 0.15, 0)
+    
+    # plt.imshow(density_overlay_image)
+    # plt.imshow(density_image)
+    # plt.show()
+
+    imwrite(save_dir + "/" + file_name + ".png", image)
     imwrite(save_dir + "/" + file_name + "_cell_mask.png", masked_seg_image)
     imwrite(save_dir + "/" + file_name + "_cell_flow.png", flow_image)
-    imwrite(save_dir + "/" + file_name + "_cell_prob.tiff", prob_image)
+    imwrite(save_dir + "/" + file_name + "_cell_prob.png", prob_image)
+    imwrite(save_dir + "/" + file_name + "_cell_dots.png", dots_image)
+    imwrite(save_dir + "/" + file_name + "_cell_density.png", density_image)
+    imwrite(save_dir + "/" + file_name + "_cell_density_overlay.png", density_overlay_image)
 
     with open(save_dir + "/" + file_name + "_cell_count.json", "w") as outfile:
         json.dump({"cell_count": num_of_mask}, outfile)

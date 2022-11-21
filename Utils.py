@@ -11,6 +11,9 @@ import matplotlib.pyplot as plt
 import cv2
 from skimage import measure
 from skimage import io
+from scipy import ndimage
+from scipy import stats
+from time import monotonic
 
 def tile_image(img, shape, overlap_percentage):
     x_points = [0]
@@ -46,8 +49,21 @@ def tile_image(img, shape, overlap_percentage):
             split = img[i:i+shape[0], j:j+shape[1]]
             splits.append([split, (i, j)])
     return splits
+    
 
-def standardizeImage(image):
+def standardizeImage(image, force_uint8=False):
+    if(image.dtype != np.uint8):
+        if(len(np.unique(image)[1:])>256):
+            image = image.astype(np.float32)
+            image += image.min()
+            if(force_uint8):
+                image/=(image.max() / 256)
+                image = image.astype(np.uint8)
+            else:
+                image/=(image.max() / 65535)
+                image = image.astype(np.uint16)
+        else:
+            image = image.astype(np.uint8)
     if(len(image.shape)==2):
         image = np.dstack([image])
     
@@ -115,6 +131,22 @@ def open_images_and_masks(file_dir, image_ext=[".tiff",".tif"]):
 
 def mask_to_countour(mask):
     print(mask.shape)
+
+def dots_image_to_density(dots_image, kernel_size):
+    img = ndimage.gaussian_filter(dots_image[:,:,0], (kernel_size,kernel_size))
+    return img
+
+def mask_to_dots_image(mask):
+    blank = np.zeros(mask.shape)
+    center_points = []
+    print("Converting mask to dots")
+    for pixel_val in np.unique(mask)[1:]:
+        single_seg_mask = np.where(mask == pixel_val, 1, 0)
+        mass = ndimage.measurements.center_of_mass(single_seg_mask)
+        if len(mass)>2:
+            mass = mass[0:2]
+        blank[int(mass[0]),int(mass[1]), 0] += 1
+    return blank
 
 def contour_to_mask(mask_shape, polygons):
     mask_image = np.zeros(mask_shape, dtype=np.uint8)
