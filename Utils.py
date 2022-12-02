@@ -51,16 +51,18 @@ def tile_image(img, shape, overlap_percentage):
     return splits
     
 
-def standardizeImage(image, force_uint8=False):
+def standardizeImage(image, force_uint8=False, max=None):
+    if(max==None):
+        max = image.max()
     if(image.dtype != np.uint8):
         if(len(np.unique(image)[1:])>256):
             image = image.astype(np.float32)
             image += image.min()
             if(force_uint8):
-                image/=(image.max() / 256)
+                image/=(max / 256)
                 image = image.astype(np.uint8)
             else:
-                image/=(image.max() / 65535)
+                image/=(max / 65535)
                 image = image.astype(np.uint16)
         else:
             image = image.astype(np.uint8)
@@ -74,6 +76,34 @@ def standardizeImage(image, force_uint8=False):
         empty_img = np.zeros(image[:,:,0].shape)
         image = np.dstack([image, empty_img])
     return image
+
+def normalizeImages(images, method="minmax"):
+    means = []
+    maxs = []
+    mins = []
+    stds = []
+    for image in images:
+        means.append(np.mean(image))
+        maxs.append(np.max(image))
+        mins.append(np.min(image))
+    mean = np.mean(means)
+    max = np.max(maxs)
+    min = np.min(mins)
+
+    for image in images:
+        stds.append(np.std(image))
+
+    std = np.mean(stds)
+    
+    print(mean, std)
+    output_images = []
+    for image in images:
+        if(method=="minmax"):
+            output_images.append(image / max)
+        elif(method=="normal"):
+            output_images.append((image-mean)/std)
+
+    return output_images
 
 def maskImage(grayscale_mask, image):
     mask = grayscale_mask
@@ -117,6 +147,7 @@ def open_images_and_masks(file_dir, image_ext=[".tiff",".tif"]):
             mask_name = file_name.replace(file_ext, "_Mask.roi")
             if(mask_name in file_names):
                 roi = read_roi_file(file_dir + "/" + mask_name)
+                # print(roi)
             else:
                 mask_name = file_name.replace(file_ext, "_Mask.zip")
                 if(mask_name in file_names):
@@ -133,6 +164,7 @@ def mask_to_countour(mask):
     print(mask.shape)
 
 def dots_image_to_density(dots_image, kernel_size):
+    dots_image = dots_image.astype(np.float32)
     img = ndimage.gaussian_filter(dots_image[:,:,0], (kernel_size,kernel_size))
     return img
 
