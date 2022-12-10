@@ -174,6 +174,26 @@ def open_images_and_masks(file_dir, image_ext=[".tiff",".tif"]):
             image_mask_set.append((image, roi, file_name.replace(file_ext, "")))
     return image_mask_set
 
+def open_masks(file_dir):
+    image_mask_set = {}
+    file_names = os.listdir(file_dir)
+    for file_name in file_names:
+        roi = None
+        if(file_name.endswith("_Mask.roi")):
+            # print("Opening: " + file_name)
+            roi = read_roi_file(file_dir + "/" + file_name)
+        if(file_name.endswith("_Mask.zip")):
+            # print("Opening: " + file_name)
+            try:
+                roi = dict(read_roi_zip(file_dir + "/" + file_name))
+            except BadZipFile:
+                roi = None
+                print("ROI file is not a zip file please remask: " + file_dir + "/" + file_name)
+        file_name = file_name.replace("_Mask.roi", "")
+        file_name = file_name.replace("_Mask.zip", "")
+        image_mask_set[file_name] = roi
+    return image_mask_set
+
 def mask_to_countour(mask):
     print(mask.shape)
 
