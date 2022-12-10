@@ -13,11 +13,13 @@ import json
 from imageio import imwrite
 from time import monotonic
 
-file_dir = "C:/Users/gator/OneDrive - University of Florida/10x images for quantification/Coding/TO TEST CODE"
+file_dir = "C:/Users/gator/OneDrive - University of Florida/10x images for quantification/PM NEUN FOR QUANTIFICATION"
 save_dir = file_dir + "/model_output"
 
 model_path = "C:/Users/gator/OneDrive - University of Florida/10x images for quantification/Coding/CellPoseTesting/split/models/CP_20221116_160410"
 batch_size = 4
+
+resume = True
 
 use_GPU = core.use_gpu()
 logger_setup()
@@ -42,14 +44,42 @@ for param in params:
     save_dir = file_dir + "/model_output_" + str(param[0]) + "_" + str(int(param[1]*10)) + "_" + str(int(param[2]*10))
     os.makedirs(save_dir, exist_ok=True)
     image_mask_pairs = open_images_and_masks(file_dir)
+    
+    if(resume):
+        file_names = os.listdir(save_dir)
+        images_in_target_dir, masks_in_target_dir, file_names_in_target_dir = zip(*image_mask_pairs)
+        file_names_in_target_dir = list(file_names_in_target_dir)
+        masks_in_target_dir = list(masks_in_target_dir)
+        images_in_target_dir = list(images_in_target_dir)
+        for file_name in file_names:
+            file_name = file_name.replace(".png", "")
+            try:
+                print("output image: "  + file_name)
+                # print(file_names_in_target_dir)
+                index = file_names_in_target_dir.index(file_name)
+                print("target image: " + file_names_in_target_dir[index])
+                file_names_in_target_dir.pop(index)
+                masks_in_target_dir.pop(index)
+                images_in_target_dir.pop(index)
+                
+            except ValueError:
+                print("Value not in target directory but present in output directory")
+        image_mask_pairs = list(zip(images_in_target_dir, masks_in_target_dir, file_names_in_target_dir))
+            
+    num_of_images = len(image_mask_pairs)
+    idx = 0
     for image, mask, file_name in image_mask_pairs:
+        # print(mask)
+        start = monotonic()
+        print("Processing image " + str(idx) + " of " + str(num_of_images) + " : " + file_name)
+        idx += 1
         masks, flows, styles = model.eval([image], diameter=param[0], flow_threshold=param[1], channels=[0,0], cellprob_threshold=param[2])
         seg_mask = masks[0]
 
         polygons = []
         for key, value in mask.items():
             polygon = [list(zip(value["x"],value["y"]))]
-            polygons.append(polygon)
+            polygons.append(np.array(polygon,dtype=np.int32))
         mask_image = contour_to_mask(image.shape[0:2], polygons)
         mask_image = standardizeImage(mask_image)
         
@@ -59,15 +89,15 @@ for param in params:
 
         flow_image = standardizeImage(flows[0][0])
         flow_image = maskImage(mask_image, flow_image)
-        print(flow_image.dtype)
+        # print(flow_image.dtype)
 
         prob_image = standardizeImage(flows[0][1][0]) #[:,:,0]
         prob_image = maskImage(mask_image, prob_image)
-        print(prob_image.dtype)
+        # print(prob_image.dtype)
 
         dots = mask_to_dots_image(masked_seg_image)
         dots_image = standardizeImage(dots)
-        print(dots_image.dtype)
+        # print(dots_image.dtype)
         density_image = dots_image_to_density(dots, 35)
         density_images.append((file_name, density_image))
         density_image = standardizeImage(density_image, force_uint8=True)
@@ -75,10 +105,6 @@ for param in params:
         density_image_color = cv2.cvtColor(cv2.applyColorMap(density_image, cv2.COLORMAP_HOT), cv2.COLOR_BGR2RGB)
 
         density_overlay_image = cv2.addWeighted(image, 0.85, density_image_color, 0.15, 0)
-        
-        # plt.imshow(density_overlay_image)
-        # plt.imshow(density_image)
-        # plt.show()
 
         imwrite(save_dir + "/" + file_name + ".png", image)
         imwrite(save_dir + "/" + file_name + "_cell_mask.png", masked_seg_image)
@@ -91,21 +117,10 @@ for param in params:
         with open(save_dir + "/" + file_name + "_cell_count.json", "w") as outfile:
             json.dump({"cell_count": num_of_mask}, outfile)
 
+        end = monotonic()
+        print("Processing took: " + str(end-start))
+
     minMaxedImages = normalizeImages([image for file_name, image in density_images], method="minmax")
     for (file_name, _), image in list(zip(density_images, minMaxedImages)):
         image = standardizeImage(image, force_uint8=False, max=1)
         imwrite(save_dir + "/" + file_name + "_cell_density_minmaxed.png", image)
-    # images = []
-    # for idx, cropped_image in enumerate(generateCrops(file_dir, save_dir, crop_size, False)):
-    #     images.append(cropped_image)
-    #     if((idx+1)%batch_size==0):
-    #         masks, flows, styles = model.eval(images, diameter=None, flow_threshold=1.0, channels=[0,0], cellprob_threshold=0.3)
-    #         for iidx in range(batch_size):
-    #             maski = masks[iidx]
-    #             flowi = flows[iidx][0]
-
-    #             fig = plt.figure(figsize=(12,5))
-                # plot.show_segmentation(fig, images[iidx], maski, flowi, channels=[0,0])
-    #             plt.tight_layout()
-    #             plt.show()
-    #         images = []

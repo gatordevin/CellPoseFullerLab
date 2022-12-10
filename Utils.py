@@ -146,9 +146,23 @@ def open_images_and_masks(file_dir, image_ext=[".tiff",".tif"]):
             roi = None
             mask_name = file_name.replace(file_ext, "_Mask.roi")
             if(mask_name in file_names):
+                # print("reading roi")
                 roi = read_roi_file(file_dir + "/" + mask_name)
+                for key, value in roi.items():
+                    value : dict
+                    if "x" not in list(value.keys()):
+                        # print(value)
+                        # print("processing roi")
+                        new_values = {}
+                        new_values["x"] = []
+                        new_values["y"] = []
+                        for coord in value["paths"][0]:
+                            new_values["x"].append(coord[0])
+                            new_values["y"].append(coord[1])
+                        roi[key] = new_values
                 # print(roi)
             else:
+                # print("reading zip")
                 mask_name = file_name.replace(file_ext, "_Mask.zip")
                 if(mask_name in file_names):
                     try:
