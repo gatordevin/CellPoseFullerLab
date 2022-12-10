@@ -6,7 +6,7 @@ import numpy as np
 
 model_output_folder = "C:/Users/gator/OneDrive - University of Florida/10x images for quantification/PM NEUN FOR QUANTIFICATION/model_output_12_8_-30"
 mask_folder = "C:/Users/gator/OneDrive - University of Florida/10x images for quantification/PM NEUN FOR QUANTIFICATION"
-
+stats_folder = "C:/Users/gator/OneDrive - University of Florida/10x images for quantification/PM NEUN FOR QUANTIFICATION/model_output_12_8_-30/Stats"
 def read_json_files_into_dict(folder_path):
     json_files = {}
     # Read all .roi and .zip 
@@ -83,7 +83,39 @@ from matplotlib import pyplot as plt
 # Plot density of cells in split_dict here.
 for animal_number, images in split_dict.items():
     density = []
+    count = []
+    area = []
     for image_name, image_data in images.items():
         density.append(image_data["density"])
+        count.append(image_data["cell_count"])
+        area.append(image_data["area"])
+
+    # Smooth out data.
+    smooth_factor = 6
+    density = [sum(density[i:i+smooth_factor])/smooth_factor for i in range(len(density)-smooth_factor-1)]
+    count = [sum(count[i:i+smooth_factor])/smooth_factor for i in range(len(count)-smooth_factor-1)]
+    area = [sum(area[i:i+smooth_factor])/smooth_factor for i in range(len(area)-smooth_factor-1)]
+    
+
+    # Normalize each array
+    density = [x / max(density) for x in density]
+    count = [x / max(count) for x in count]
+    area = [x / max(area) for x in area]
+
+
+    plt.plot(count)
     plt.plot(density)
-    plt.show()
+    plt.plot(area)
+    
+    # Label the axes
+    plt.xlabel("Image Number")
+    plt.ylabel("Normalized Cell Count")
+    plt.title("Normalized Cell Count vs. Image Number for Animal " + animal_number)
+    plt.legend(["Cell Count", "Density", "Area"])
+
+    # save plot to stats folder.
+    plt.savefig(stats_folder + "/animal_" + animal_number + "_cell_count_vs_image_number.png")
+    # clear plot
+    plt.clf()
+
+    # plt.show()

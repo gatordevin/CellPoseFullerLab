@@ -152,14 +152,17 @@ def open_images_and_masks(file_dir, image_ext=[".tiff",".tif"]):
                     value : dict
                     if "x" not in list(value.keys()):
                         # print(value)
-                        # print("processing roi")
+                        # print("processing roi")   
                         new_values = {}
-                        new_values["x"] = []
-                        new_values["y"] = []
-                        for coord in value["paths"][0]:
-                            new_values["x"].append(coord[0])
-                            new_values["y"].append(coord[1])
-                        roi[key] = new_values
+                        # print(len(value["paths"]))
+                        for idx, path in enumerate(value["paths"]):
+                            new_values[str(idx)] = {}
+                            new_values[str(idx)]["x"] = []
+                            new_values[str(idx)]["y"] = []
+                            for coord in path:
+                                new_values[str(idx)]["x"].append(coord[0])
+                                new_values[str(idx)]["y"].append(coord[1])
+                roi = new_values
                 # print(roi)
             else:
                 # print("reading zip")
@@ -182,6 +185,20 @@ def open_masks(file_dir):
         if(file_name.endswith("_Mask.roi")):
             # print("Opening: " + file_name)
             roi = read_roi_file(file_dir + "/" + file_name)
+            for key, value in roi.items():
+                value : dict
+                if "x" not in list(value.keys()):
+                    # print(value)
+                    # print("processing roi")
+                    new_values = {}
+                    new_values["x"] = []
+                    new_values["y"] = []
+                    for coord in value["paths"][0]:
+                        new_values["x"].append(coord[0])
+                        new_values["y"].append(coord[1])
+                    roi[key] = new_values
+            file_name = file_name.replace("_Mask.roi", "")
+            image_mask_set[file_name] = roi
         if(file_name.endswith("_Mask.zip")):
             # print("Opening: " + file_name)
             try:
@@ -189,9 +206,8 @@ def open_masks(file_dir):
             except BadZipFile:
                 roi = None
                 print("ROI file is not a zip file please remask: " + file_dir + "/" + file_name)
-        file_name = file_name.replace("_Mask.roi", "")
-        file_name = file_name.replace("_Mask.zip", "")
-        image_mask_set[file_name] = roi
+            file_name = file_name.replace("_Mask.zip", "")
+            image_mask_set[file_name] = roi
     return image_mask_set
 
 def mask_to_countour(mask):
