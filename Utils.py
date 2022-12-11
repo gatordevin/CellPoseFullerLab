@@ -148,6 +148,7 @@ def open_images_and_masks(file_dir, image_ext=[".tiff",".tif"]):
             if(mask_name in file_names):
                 # print("reading roi")
                 roi = read_roi_file(file_dir + "/" + mask_name)
+                new_values = None
                 for key, value in roi.items():
                     value : dict
                     if "x" not in list(value.keys()):
@@ -162,7 +163,8 @@ def open_images_and_masks(file_dir, image_ext=[".tiff",".tif"]):
                             for coord in path:
                                 new_values[str(idx)]["x"].append(coord[0])
                                 new_values[str(idx)]["y"].append(coord[1])
-                roi = new_values
+                if(new_values!=None):
+                    roi = new_values
                 # print(roi)
             else:
                 # print("reading zip")

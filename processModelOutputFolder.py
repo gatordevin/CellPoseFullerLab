@@ -55,11 +55,11 @@ def split_dictionary(dictionary):
         animal_number_dict[value["animal_number"]][key] = value
     return animal_number_dict
 
-workbook = xlsxwriter.Workbook("C:/Users/gator/OneDrive - University of Florida/10x images for quantification/PM NEUN FOR QUANTIFICATION/model_output_12_8_-30/Stats/quantification_excel2.xlsx")
+workbook = xlsxwriter.Workbook("C:/Users/gator/OneDrive - University of Florida/10x images for quantification/PM NEUN FOR QUANTIFICATION/model_output_12_8_-30/Stats/quantification_excel_fixed_zeroes.xlsx")
 worksheet = workbook.add_worksheet()
 
 split_dict = split_dictionary(sorted_dict)
-
+row = 1
 for animal_number, images in split_dict.items():
     worksheet.write(0, 0, "image name")
     worksheet.write(0, 1, "cell count")
@@ -67,7 +67,6 @@ for animal_number, images in split_dict.items():
     worksheet.write(0, 3, "slide number")
     worksheet.write(0, 4, "column number")
     worksheet.write(0, 5, "row number")
-    row = 1
     for image_name, image_data in images.items():
         worksheet.write(row, 0, image_name)
         worksheet.write(row, 1, image_data["cell_count"])
