@@ -52,14 +52,14 @@ for param in params:
         masks_in_target_dir = list(masks_in_target_dir)
         images_in_target_dir = list(images_in_target_dir)
         for file_name in file_names:
-            if(".png" in file_name):
+            if("NEUN.png" in file_name):
                 file_name = file_name.replace(".png", "")
                 json_name = file_name + "_cell_count.json"
                 # Read count from json file.
                 json_file = open(save_dir + "/" + json_name, "r")
                 json_data = json.load(json_file)
                 json_file.close()
-                if(json_data["count"] != 0):
+                if(json_data["cell_count"] != 0):
                     try:
                         print("output image: "  + file_name)
                         # print(file_names_in_target_dir)
