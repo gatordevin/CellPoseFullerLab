@@ -9,11 +9,15 @@ from read_roi import read_roi_file, read_roi_zip
 import numpy as np
 import matplotlib.pyplot as plt
 import cv2
+from shapely.geometry import Point, LineString, Polygon
+from shapely import affinity
 from skimage import measure
 from skimage import io
 from scipy import ndimage
 from scipy import stats
 from time import monotonic
+from skimage.segmentation import find_boundaries
+from shapely.ops import linemerge, polygonize, unary_union
 
 def tile_image(img, shape, overlap_percentage):
     x_points = [0]
@@ -76,6 +80,110 @@ def standardizeImage(image, force_uint8=False, max=None):
         empty_img = np.zeros(image[:,:,0].shape)
         image = np.dstack([image, empty_img])
     return image
+
+def get_gray_matter_section_polygons(polygon):
+    shapely_polygon = Polygon(polygon)
+    convex_hull = shapely_polygon.convex_hull
+
+    lines = []
+    for i in range(len(convex_hull.exterior.xy[0])-1):
+        lines.append(LineString([Point(convex_hull.exterior.xy[0][i], convex_hull.exterior.xy[1][i]), Point(convex_hull.exterior.xy[0][i+1], convex_hull.exterior.xy[1][i+1])]))
+    lines.sort(key=lambda x: x.length, reverse=True)
+    if(len(lines) > 3):
+        longest_line = lines[0]
+    else:
+        return
+
+    # Get all lines longer than 100 pixels.
+    lines = [line for line in lines if line.length > 150]
+    # Find the two lines that hav the most similiar angle.
+    smallest_angle_lines = []
+    angle_diff = []
+    for i in range(len(lines)):
+        angle1 = np.arctan2(lines[i].coords[1][1] - lines[i].coords[0][1], lines[i].coords[1][0] - lines[i].coords[0][0])
+        for j in range(i+1, len(lines)):
+            # Check if the two lines share a point.
+            if(lines[i].coords[0] == lines[j].coords[0] or lines[i].coords[0] == lines[j].coords[1] or lines[i].coords[1] == lines[j].coords[0] or lines[i].coords[1] == lines[j].coords[1]):
+                continue
+            angle2 = np.arctan2(lines[j].coords[1][1] - lines[j].coords[0][1], lines[j].coords[1][0] - lines[j].coords[0][0])
+            # print(angle1, angle2)
+            dff = abs(angle1 - angle2)
+            # Minimize the difference between the two angles.
+            if(dff > np.pi/2):
+                dff = np.pi - dff
+            # to degrees.
+            dff = abs(np.degrees(dff))
+            # print(dff)
+            angle_diff.append(dff)
+            # check if dff is the smallest in angle diff and if so add the two lines to the smallest_angle_lines.
+            if(dff == min(angle_diff)):
+                smallest_angle_lines = [lines[i], lines[j]]
+            if(len(smallest_angle_lines) == 0):
+                smallest_angle_lines = [lines[i], lines[j]]
+
+    if(len(smallest_angle_lines) == 0):
+        # Display shapely_polygon.
+        print("Invalid polygon moving on to next polygon.")
+        return
+
+    # Get average angle of smallest angle lines.
+    # print(smallest_angle_lines)
+    angle1 = np.arctan2(smallest_angle_lines[0].coords[1][1] - smallest_angle_lines[0].coords[0][1], smallest_angle_lines[0].coords[1][0] - smallest_angle_lines[0].coords[0][0])
+    angle2 = np.arctan2(smallest_angle_lines[1].coords[1][1] - smallest_angle_lines[1].coords[0][1], smallest_angle_lines[1].coords[1][0] - smallest_angle_lines[1].coords[0][0])
+    angle = (angle1 + angle2)/2
+    angle = np.degrees(angle)
+    print("Average angle of smallest angle lines:", angle)
+
+    # Find distance two smallest lines are apart.
+    distance = smallest_angle_lines[0].distance(smallest_angle_lines[1])
+    print("Distance between smallest angle lines:", distance)
+
+    # Get line between midpoints of smallest angle lines.
+    midpoint1 = smallest_angle_lines[0].interpolate(0.5, normalized=True)
+    midpoint2 = smallest_angle_lines[1].interpolate(0.5, normalized=True)
+    midpoint_line = LineString([midpoint1, midpoint2])
+    plt.plot(midpoint_line.coords.xy[0], midpoint_line.coords.xy[1], color='g')
+
+    # Plot two lines one at the same angle and one perpendicular to the angle.
+    line1 = affinity.rotate(midpoint_line, 90, "centroid")
+    # Increase size of line1
+    line1 = affinity.scale(line1, 1000, 1000)
+
+    # Plot two other lines that are the same anlge but shifted by distance/6.
+    # Translate line 1 along line 2 a distance of distance/6.
+    xoff = distance/6 * np.cos(np.radians(angle))
+    yoff = distance/6 * np.sin(np.radians(angle))
+    line3 = affinity.translate(line1, xoff, yoff)
+    line4 = affinity.translate(line1, -xoff, -yoff)
+
+    merged = linemerge([shapely_polygon.boundary, midpoint_line])
+    borders = unary_union(merged)
+    polygons = polygonize(borders)
+
+    left_gray_matter = polygons[0]
+    right_gray_matter = polygons[1]
+
+    merged = linemerge([left_gray_matter.boundary, line3])
+    borders = unary_union(merged)
+    left_polygons = polygonize(borders)
+
+    merged = linemerge([right_gray_matter.boundary, line3])
+    borders = unary_union(merged)
+    right_polygons = polygonize(borders)
+
+
+
+    for poly in left_polygons:
+        x, y = poly.exterior.xy
+        # change color
+        plt.plot(x, y, color='r')
+
+    for poly in right_polygons:
+        x, y = poly.exterior.xy
+        # change color
+        plt.plot(x, y, color='b')
+
+    plt.show()
 
 def normalizeImages(images, method="minmax"):
     means = []
@@ -222,15 +330,58 @@ def dots_image_to_density(dots_image, kernel_size):
 
 def mask_to_dots_image(mask):
     blank = np.zeros(mask.shape)
+
+    mask[find_boundaries(mask, mode='inner')] = 0
+    contours, hierarchy = cv2.findContours((mask==0).astype(np.uint8), cv2.RETR_CCOMP, cv2.CHAIN_APPROX_NONE)
+    contours = contours[1:]
+
     center_points = []
+    # Compute statistics and append to dictionary.
+    for c in contours:
+        if(len(c) < 5):
+            continue
+        mass = cv2.moments(c)
+        center = [mass["m10"] / mass["m00"], mass["m01"] / mass["m00"]]
+        center_points.append(center)
+        blank[int(center[0]),int(center[1]), 0] += 1
+
     print("Converting mask to dots")
-    for pixel_val in np.unique(mask)[1:]:
-        single_seg_mask = np.where(mask == pixel_val, 1, 0)
-        mass = ndimage.measurements.center_of_mass(single_seg_mask)
-        if len(mass)>2:
-            mass = mass[0:2]
-        blank[int(mass[0]),int(mass[1]), 0] += 1
     return blank
+
+def mask_to_json(mask):
+    mask[find_boundaries(mask, mode='inner')] = 0
+    contours, hierarchy = cv2.findContours((mask==0).astype(np.uint8), cv2.RETR_CCOMP, cv2.CHAIN_APPROX_NONE)
+    contours = contours[1:]
+
+    contour_dicts = []
+    # Compute statistics and append to dictionary.
+    for c in contours:
+        if(len(c) < 5):
+            continue
+        contour_dict = {}
+        # Center of mass.
+        mass = cv2.moments(c)
+        contour_dict["center"] = [mass["m10"] / mass["m00"], mass["m01"] / mass["m00"]]
+        contour_dict["area"] = cv2.contourArea(c)
+        contour_dict["perimeter"] = cv2.arcLength(c, True)
+        contour_dict["contour"] = c.tolist()
+        contour_dict["circularity"] = 4 * np.pi * cv2.contourArea(c) / cv2.arcLength(c, True) ** 2
+        try:
+            contour_dict["eccentricity"] = cv2.fitEllipse(c)[1][0] / cv2.fitEllipse(c)[1][1]
+        except:
+            print(c)
+            plt.imshow(mask)
+            plt.plot(c[:,0,0], c[:,0,1])
+            plt.show()
+        contour_dict["orientation"] = cv2.fitEllipse(c)[2]
+        contour_dict["major_axis_length"] = cv2.fitEllipse(c)[1][0]
+        contour_dict["minor_axis_length"] = cv2.fitEllipse(c)[1][1]
+        contour_dict["solidity"] = cv2.contourArea(c) / cv2.contourArea(cv2.convexHull(c))
+        contour_dict["extent"] = cv2.contourArea(c) / (cv2.fitEllipse(c)[1][0] * cv2.fitEllipse(c)[1][1])
+        contour_dict["equivalent_diameter"] = np.sqrt(4 * cv2.contourArea(c) / np.pi)
+        contour_dicts.append(contour_dict)
+
+    return contour_dicts
 
 def contour_to_mask(mask_shape, polygons):
     mask_image = np.zeros(mask_shape, dtype=np.uint8)
