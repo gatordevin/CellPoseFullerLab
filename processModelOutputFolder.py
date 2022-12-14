@@ -1,22 +1,56 @@
 import os
 import json
 import xlsxwriter
-from Utils import open_masks
+from Utils import open_masks, readAndStandardize, mask_to_json
 import numpy as np
+from matplotlib import pyplot as plt
 
-model_output_folder = "C:/Users/gator/OneDrive - University of Florida/10x images for quantification/PM NEUN FOR QUANTIFICATION/model_output_12_8_-30"
+model_output_folder = "C:/Users/gator/OneDrive - University of Florida/10x images for quantification/PM NEUN FOR QUANTIFICATION/model_output_12_7_-20"
 mask_folder = "C:/Users/gator/OneDrive - University of Florida/10x images for quantification/PM NEUN FOR QUANTIFICATION"
-stats_folder = "C:/Users/gator/OneDrive - University of Florida/10x images for quantification/PM NEUN FOR QUANTIFICATION/model_output_12_8_-30/Stats"
+stats_folder = "C:/Users/gator/OneDrive - University of Florida/10x images for quantification/PM NEUN FOR QUANTIFICATION/model_output_12_7_-20/Stats"
 def read_json_files_into_dict(folder_path):
     json_files = {}
     # Read all .roi and .zip 
     masks = open_masks(mask_folder)
     for file in os.listdir(folder_path):
-        if file.endswith(".json"):
+        if file.endswith("_cell_count.json"):
             with open(os.path.join(folder_path, file)) as f:
                 data = json.load(f)
                 file = file.replace("_cell_count.json", "")
+                cell_masks_file = file + "_cell_mask.png"
+                cell_mask_info_file = file + "_cell_masks_info.json"
+                if cell_mask_info_file in os.listdir(folder_path):
+                    with open(os.path.join(model_output_folder, cell_mask_info_file)) as f:
+                        data = json.load(f)
+                        json_files[file] = data
+                        print("File " + file + " already processed.")
+                        continue
+                cell_masks = readAndStandardize(model_output_folder + "/" + cell_masks_file)
+
                 json_files[file] = data
+
+                contour_dicts = mask_to_json(cell_masks)
+                json_files[file]["cells"] = contour_dicts
+                centers = []
+                diameters = []
+                for contour_dict in contour_dicts:
+                    center = contour_dict["center"]
+                    diameter = contour_dict["equivalent_diameter"]
+                    centers.append(center)
+                    diameters.append(diameter)
+
+                bin_size = 0.5
+                bins = np.arange(0, 35, step=bin_size)
+                json_files[file]["count_by_size"] = {}
+                for bin in bins:
+                    json_files[file]["count_by_size"][str(bin)+"-"+str(bin+bin_size)] = 0
+                for diameter in diameters:
+                    for bin in bins:
+                        if diameter >= bin and diameter < bin+bin_size:
+                            json_files[file]["count_by_size"][str(bin)+"-"+str(bin+bin_size)] += 1
+                            break
+
+                
                 json_files[file]["animal_number"] = file.split("s")[0]
                 json_files[file]["slide_number"] = file.split("s")[1].split("c")[0]
                 json_files[file]["column_number"] = file.split("s")[1].split("c")[1].split("r")[0]
@@ -30,6 +64,10 @@ def read_json_files_into_dict(folder_path):
                 json_files[file]["area"] = area
                 # Calculate density
                 json_files[file]["density"] = json_files[file]["cell_count"] / area
+
+                # Save json file
+                with open(os.path.join (folder_path, file + "_cell_masks_info.json"), "w") as f:
+                    json.dump(json_files[file], f)
 
     return json_files
 
@@ -55,7 +93,7 @@ def split_dictionary(dictionary):
         animal_number_dict[value["animal_number"]][key] = value
     return animal_number_dict
 
-workbook = xlsxwriter.Workbook("C:/Users/gator/OneDrive - University of Florida/10x images for quantification/PM NEUN FOR QUANTIFICATION/model_output_12_8_-30/Stats/quantification_excel_fixed_zeroes.xlsx")
+workbook = xlsxwriter.Workbook("C:/Users/gator/OneDrive - University of Florida/10x images for quantification/PM NEUN FOR QUANTIFICATION/model_output_12_7_-20/Stats/quantification_excel_binned_diameters.xlsx")
 worksheet = workbook.add_worksheet()
 
 split_dict = split_dictionary(sorted_dict)
@@ -67,6 +105,10 @@ for animal_number, images in split_dict.items():
     worksheet.write(0, 3, "slide number")
     worksheet.write(0, 4, "column number")
     worksheet.write(0, 5, "row number")
+    column = 6
+    for key, value in images[list(images.keys())[0]]["count_by_size"].items():
+        worksheet.write(0, column, "Diameter " + key)
+        column += 1
     for image_name, image_data in images.items():
         worksheet.write(row, 0, image_name)
         worksheet.write(row, 1, image_data["cell_count"])
@@ -74,6 +116,10 @@ for animal_number, images in split_dict.items():
         worksheet.write(row, 3, image_data["slide_number"])
         worksheet.write(row, 4, image_data["column_number"])
         worksheet.write(row, 5, image_data["row_number"])
+        column = 6
+        for key, value in image_data["count_by_size"].items():
+            worksheet.write(row, column, value)
+            column += 1
         row += 1
 
 workbook.close()
