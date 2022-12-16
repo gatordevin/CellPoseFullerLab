@@ -1,9 +1,10 @@
 import os
 import json
 import xlsxwriter
-from Utils import open_masks, readAndStandardize, mask_to_json
+from Utils import open_masks, readAndStandardize, mask_to_json, get_gray_matter_section_polygons
 import numpy as np
 from matplotlib import pyplot as plt
+import cv2
 
 model_output_folder = "C:/Users/gator/OneDrive - University of Florida/10x images for quantification/PM NEUN FOR QUANTIFICATION/model_output_12_7_-20"
 mask_folder = "C:/Users/gator/OneDrive - University of Florida/10x images for quantification/PM NEUN FOR QUANTIFICATION"
@@ -12,8 +13,11 @@ def read_json_files_into_dict(folder_path):
     json_files = {}
     # Read all .roi and .zip 
     masks = open_masks(mask_folder)
+    idx = 0
     for file in os.listdir(folder_path):
         if file.endswith("_cell_count.json"):
+            print(str(idx) + " out of " + str(len(masks)))
+            idx += 1
             with open(os.path.join(folder_path, file)) as f:
                 data = json.load(f)
                 file = file.replace("_cell_count.json", "")
@@ -24,7 +28,7 @@ def read_json_files_into_dict(folder_path):
                         data = json.load(f)
                         json_files[file] = data
                         print("File " + file + " already processed.")
-                        continue
+                        # continue
                 cell_masks = readAndStandardize(model_output_folder + "/" + cell_masks_file)
 
                 json_files[file] = data
@@ -38,6 +42,41 @@ def read_json_files_into_dict(folder_path):
                     diameter = contour_dict["equivalent_diameter"]
                     centers.append(center)
                     diameters.append(diameter)
+
+                section_counts = {}
+                for key, value in masks[file].items():
+                    polygon = list(zip(value["x"],value["y"]))
+                    gray_matter_section_dict = get_gray_matter_section_polygons(polygon)
+                    # Check which section the center of a cell is in.
+                    if(gray_matter_section_dict!=None):
+                        # Plot each section with rainbow colors.
+                        plt.plot(gray_matter_section_dict["left_ventral_horn"].exterior.xy[0], gray_matter_section_dict["left_ventral_horn"].exterior.xy[1], color='r')
+                        plt.plot(gray_matter_section_dict["left_lateral_horn"].exterior.xy[0], gray_matter_section_dict["left_lateral_horn"].exterior.xy[1], color='orange')
+                        plt.plot(gray_matter_section_dict["left_dorsal_horn"].exterior.xy[0], gray_matter_section_dict["left_dorsal_horn"].exterior.xy[1], color='y')
+                        plt.plot(gray_matter_section_dict["right_dorsal_horn"].exterior.xy[0], gray_matter_section_dict["right_dorsal_horn"].exterior.xy[1], color='g')
+                        plt.plot(gray_matter_section_dict["right_lateral_horn"].exterior.xy[0], gray_matter_section_dict["right_lateral_horn"].exterior.xy[1], color='b')
+                        plt.plot(gray_matter_section_dict["right_ventral_horn"].exterior.xy[0], gray_matter_section_dict["right_ventral_horn"].exterior.xy[1], color='purple')
+                        for section in gray_matter_section_dict:
+                            section_counts[section] = 0
+                            contour_array = np.array(gray_matter_section_dict[section].exterior.coords).reshape((-1,1,2)).astype(np.int32)
+                            # plt.plot(contour_array[:,0,0], contour_array[:,0,1])
+                            for contour in contour_dicts:
+                                center = contour["center"]
+                                plt.plot(center[0], center[1], "ro")
+                                # Convert shapely polygon to cv2 contour.
+                                if cv2.pointPolygonTest(contour_array, center, False) >= 0:
+                                    contour["section"] = section
+                                    section_counts[section] += 1
+                                    # print("Cell is in: " + section)
+                            # plt.show()
+
+                        plt.savefig(mask_folder + "/" + file + "_sectioned.png")
+
+                # count by section
+                json_files[file]["count_by_section"] = {}
+                for key, value in section_counts.items():
+                    print(key + " contains " + str(value))
+                    json_files[file]["count_by_section"][key] = value
 
                 bin_size = 0.5
                 bins = np.arange(0, 35, step=bin_size)
@@ -64,6 +103,8 @@ def read_json_files_into_dict(folder_path):
                 json_files[file]["area"] = area
                 # Calculate density
                 json_files[file]["density"] = json_files[file]["cell_count"] / area
+
+                # print(json_files[file])
 
                 # Save json file
                 with open(os.path.join (folder_path, file + "_cell_masks_info.json"), "w") as f:
@@ -93,7 +134,7 @@ def split_dictionary(dictionary):
         animal_number_dict[value["animal_number"]][key] = value
     return animal_number_dict
 
-workbook = xlsxwriter.Workbook("C:/Users/gator/OneDrive - University of Florida/10x images for quantification/PM NEUN FOR QUANTIFICATION/model_output_12_7_-20/Stats/quantification_excel_binned_diameters.xlsx")
+workbook = xlsxwriter.Workbook("C:/Users/gator/OneDrive - University of Florida/10x images for quantification/PM NEUN FOR QUANTIFICATION/model_output_12_7_-20/Stats/quantification_excel_labeled_area_2.xlsx")
 worksheet = workbook.add_worksheet()
 
 split_dict = split_dictionary(sorted_dict)
@@ -109,6 +150,9 @@ for animal_number, images in split_dict.items():
     for key, value in images[list(images.keys())[0]]["count_by_size"].items():
         worksheet.write(0, column, "Diameter " + key)
         column += 1
+    for key, value in images[list(images.keys())[0]]["count_by_section"].items():
+        worksheet.write(0, column, "Section " + key)
+        column += 1
     for image_name, image_data in images.items():
         worksheet.write(row, 0, image_name)
         worksheet.write(row, 1, image_data["cell_count"])
@@ -118,6 +162,9 @@ for animal_number, images in split_dict.items():
         worksheet.write(row, 5, image_data["row_number"])
         column = 6
         for key, value in image_data["count_by_size"].items():
+            worksheet.write(row, column, value)
+            column += 1
+        for key, value in image_data["count_by_section"].items():
             worksheet.write(row, column, value)
             column += 1
         row += 1

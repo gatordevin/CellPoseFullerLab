@@ -142,19 +142,42 @@ def get_gray_matter_section_polygons(polygon):
     midpoint1 = smallest_angle_lines[0].interpolate(0.5, normalized=True)
     midpoint2 = smallest_angle_lines[1].interpolate(0.5, normalized=True)
     midpoint_line = LineString([midpoint1, midpoint2])
+    # Plot midpoint1 and midpoint2.
+    
+
+    # Rotate shapely polygon around center of midpoint line use the average angle of the smallest angle lines.
+    center = midpoint_line.interpolate(0.5, normalized=True)
+    shapely_polygon = affinity.rotate(shapely_polygon, -angle, origin=center)
+    midpoint_line = affinity.rotate(midpoint_line, -angle, origin=center)
+    midpoint1 = affinity.rotate(midpoint1, -angle, origin=center)
+    midpoint2 = affinity.rotate(midpoint2, -angle, origin=center)
+    plt.plot(shapely_polygon.exterior.xy[0], shapely_polygon.exterior.xy[1], color='r')
     plt.plot(midpoint_line.coords.xy[0], midpoint_line.coords.xy[1], color='g')
+    # plt.plot(midpoint1.x, midpoint1.y, 'ro')
+    # plt.plot(midpoint2.x, midpoint2.y, 'bo')
 
     # Plot two lines one at the same angle and one perpendicular to the angle.
     line1 = affinity.rotate(midpoint_line, 90, "centroid")
     # Increase size of line1
-    line1 = affinity.scale(line1, 1000, 1000)
 
     # Plot two other lines that are the same anlge but shifted by distance/6.
     # Translate line 1 along line 2 a distance of distance/6.
     xoff = distance/6 * np.cos(np.radians(angle))
     yoff = distance/6 * np.sin(np.radians(angle))
-    line3 = affinity.translate(line1, xoff, yoff)
-    line4 = affinity.translate(line1, -xoff, -yoff)
+    # Line 3 should be translated by xoff and yoff in the direction of midpoint 1.
+    # Found the direction of midpoint 1 as 1 or -1 from the center of the midpoint line.
+    direction = 1
+    if(midpoint1.x < center.x):
+        direction = -1
+    line3 = affinity.translate(line1, xoff*direction, yoff*direction)
+    line4 = affinity.translate(line1, xoff*-direction, yoff*-direction)
+
+    # Plot the two lines that are perpendicular to the angle.
+    plt.plot(line3.coords.xy[0], line3.coords.xy[1], color='b')
+    # plt.plot(line4.coords.xy[0], line4.coords.xy[1], color='b')
+
+    line3 = affinity.scale(line3, 1000, 1000)
+    line4 = affinity.scale(line4, 1000, 1000)
 
     merged = linemerge([shapely_polygon.boundary, midpoint_line])
     borders = unary_union(merged)
@@ -163,27 +186,103 @@ def get_gray_matter_section_polygons(polygon):
     left_gray_matter = polygons[0]
     right_gray_matter = polygons[1]
 
-    merged = linemerge([left_gray_matter.boundary, line3])
-    borders = unary_union(merged)
-    left_polygons = polygonize(borders)
+    try:
 
-    merged = linemerge([right_gray_matter.boundary, line3])
-    borders = unary_union(merged)
-    right_polygons = polygonize(borders)
+        boundary = left_gray_matter.boundary
+        if(left_gray_matter.boundary.geom_type=="MultiLineString"):
+            longest = None
+            for linestring in left_gray_matter.boundary.geoms:
+                if(longest==None):
+                    longest = linestring
+                else:
+                    if(linestring.length>longest.length):
+                        longest = linestring
+            boundary = longest
+        
 
+        merged = linemerge([boundary, line3])
+        borders = unary_union(merged)
+        left_polygons = polygonize(borders)
 
+        boundary = right_gray_matter.boundary
+        if(right_gray_matter.boundary.geom_type=="MultiLineString"):
+            longest = None
+            for linestring in right_gray_matter.boundary.geoms:
+                if(longest==None):
+                    longest = linestring
+                else:
+                    if(linestring.length>longest.length):
+                        longest = linestring
+            boundary = longest
 
-    for poly in left_polygons:
-        x, y = poly.exterior.xy
-        # change color
-        plt.plot(x, y, color='r')
+        merged = linemerge([boundary, line3])
+        borders = unary_union(merged)
+        right_polygons = polygonize(borders)
 
-    for poly in right_polygons:
-        x, y = poly.exterior.xy
-        # change color
-        plt.plot(x, y, color='b')
+        plt.plot(left_polygons[0].exterior.xy[0], left_polygons[0].exterior.xy[1], color='g')
+        left_dorsal_horn = left_polygons[1]
+        right_dorsal_horn = right_polygons[1]
 
-    plt.show()
+        plt.cla()
+
+        boundary = left_polygons[0].boundary
+        if(left_polygons[0].boundary.geom_type=="MultiLineString"):
+            longest = None
+            for linestring in left_polygons[0].boundary.geoms:
+                if(longest==None):
+                    longest = linestring
+                else:
+                    if(linestring.length>longest.length):
+                        longest = linestring
+            boundary = longest
+
+        merged = linemerge([boundary, line4])
+        borders = unary_union(merged)
+        left_polygons = polygonize(borders)
+
+        boundary = right_polygons[0].boundary
+        if(right_polygons[0].boundary.geom_type=="MultiLineString"):
+            longest = None
+            for linestring in right_polygons[0].boundary.geoms:
+                if(longest==None):
+                    longest = linestring
+                else:
+                    if(linestring.length>longest.length):
+                        longest = linestring
+            boundary = longest
+
+        merged = linemerge([boundary, line4])
+        borders = unary_union(merged)
+        right_polygons = polygonize(borders)
+
+        left_ventral_horn = left_polygons[0]
+        right_ventral_horn = right_polygons[0]
+
+        left_lateral_horn = left_polygons[1]
+        right_lateral_horn = right_polygons[1]
+
+        # Rotate saved polygons back.
+        left_gray_matter = affinity.rotate(left_gray_matter, angle, origin=center)
+        right_gray_matter = affinity.rotate(right_gray_matter, angle, origin=center)
+        left_dorsal_horn = affinity.rotate(left_dorsal_horn, angle, origin=center)
+        right_dorsal_horn = affinity.rotate(right_dorsal_horn, angle, origin=center)
+        left_ventral_horn = affinity.rotate(left_ventral_horn, angle, origin=center)
+        right_ventral_horn = affinity.rotate(right_ventral_horn, angle, origin=center)
+        left_lateral_horn = affinity.rotate(left_lateral_horn, angle, origin=center)
+        right_lateral_horn = affinity.rotate(right_lateral_horn, angle, origin=center)
+
+        polygon_dict = {
+            "left_dorsal_horn" : left_dorsal_horn,
+            "right_dorsal_horn" : right_dorsal_horn,
+            "left_ventral_horn" : left_ventral_horn,
+            "right_ventral_horn" : right_ventral_horn,
+            "left_lateral_horn" : left_lateral_horn,
+            "right_lateral_horn" : right_lateral_horn
+        }
+
+        return polygon_dict
+    except:
+        return None
 
 def normalizeImages(images, method="minmax"):
     means = []

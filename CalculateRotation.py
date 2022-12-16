@@ -56,8 +56,8 @@ def plot_rotations(rotations):
         idx += 1
         print(image_name, info["rotation_raw"])
         # Plot rotations.
-        plt.plot(idx, info["rotation_raw"], 'ro', color='b')
-        plt.plot(idx, info["rotation_box"], 'ro', color='r')
+        # plt.plot(idx, info["rotation_raw"], 'ro', color='b')
+        # plt.plot(idx, info["rotation_box"], 'ro', color='r')
     
     plt.title("Rotation of polygons")
     plt.xlabel("Polygon")
@@ -147,7 +147,12 @@ def plot_polygon(rotation_info):
     midpoint1 = smallest_angle_lines[0].interpolate(0.5, normalized=True)
     midpoint2 = smallest_angle_lines[1].interpolate(0.5, normalized=True)
     midpoint_line = LineString([midpoint1, midpoint2])
-    plt.plot(midpoint_line.coords.xy[0], midpoint_line.coords.xy[1], color='g')
+    # plt.plot(midpoint_line.coords.xy[0], midpoint_line.coords.xy[1], color='g')
+
+    # Rotate shapely polygon around center of midpointline by the midpint line angle.
+    rotated_shapely_polygon = affinity.rotate(shapely_polygon, angle, origin=midpoint_line.centroid)
+    plt.plot(rotated_shapely_polygon.exterior.xy[0], rotated_shapely_polygon.exterior.xy[1], color='b')
+    plt.plot(rotated_shapely_polygon.exterior.xy[0], rotated_shapely_polygon.exterior.xy[1], color='b')
 
     # Plot two lines one at the same angle and one perpendicular to the angle.
     line1 = affinity.rotate(midpoint_line, 90, "centroid")
@@ -158,15 +163,14 @@ def plot_polygon(rotation_info):
     yoff = distance/6 * np.sin(np.radians(angle))
     line3 = affinity.translate(line1, xoff, yoff)
     line4 = affinity.translate(line1, -xoff, -yoff)
-    plt.plot(line3.coords.xy[0], line3.coords.xy[1], color='g')
-    plt.plot(line4.coords.xy[0], line4.coords.xy[1], color='g')
+    # plt.plot(line3.coords.xy[0], line3.coords.xy[1], color='g')
+    # plt.plot(line4.coords.xy[0], line4.coords.xy[1], color='g')
 
 
     # for line in smallest_angle_lines:
     #     plt.plot(line.coords.xy[0], line.coords.xy[1], color='g')
 
     # Rotate polygon by angle of longest line.
-    plt.plot(shapely_polygon.exterior.xy[0], shapely_polygon.exterior.xy[1], color='b')
 
     # Plot horizontal and vertical line going through centroid.
     # horizontal_line = LineString([(centroid[0]-1000, centroid[1]), (centroid[0]+1000, centroid[1])])
