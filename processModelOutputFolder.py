@@ -5,10 +5,28 @@ from Utils import open_masks, readAndStandardize, mask_to_json, get_gray_matter_
 import numpy as np
 from matplotlib import pyplot as plt
 import cv2
+import pandas as pd
 
 model_output_folder = "C:/Users/gator/OneDrive - University of Florida/10x images for quantification/PM NEUN FOR QUANTIFICATION/model_output_12_7_-20"
 mask_folder = "C:/Users/gator/OneDrive - University of Florida/10x images for quantification/PM NEUN FOR QUANTIFICATION"
 stats_folder = "C:/Users/gator/OneDrive - University of Florida/10x images for quantification/PM NEUN FOR QUANTIFICATION/model_output_12_7_-20/Stats"
+file_map_excel = "C:/Users/gator/OneDrive - University of Florida/10x images for quantification/PM NEUN FOR QUANTIFICATION/model_output_12_7_-20/Stats/quantification_excel.xlsx"
+excel_sheet = "Sheet2"
+image_name_column = "image name"
+
+xls = pd.ExcelFile(file_map_excel)
+image_info_sheet = pd.read_excel(xls, excel_sheet)
+image_names = image_info_sheet.loc[:,image_name_column].tolist()
+
+parsed_image_names = []
+for image_name in image_names:
+    image_name = str(image_name)
+    split_image_name = image_name.split(" ")
+    if(len(split_image_name)>1):
+        parsed_image_names.append(split_image_name[0]+ " PM NEUN")
+    else:
+        parsed_image_names.append(image_name+ " PM NEUN")
+
 def read_json_files_into_dict(folder_path):
     json_files = {}
     # Read all .roi and .zip 
@@ -28,7 +46,7 @@ def read_json_files_into_dict(folder_path):
                         data = json.load(f)
                         json_files[file] = data
                         print("File " + file + " already processed.")
-                        # continue
+                        continue
                 cell_masks = readAndStandardize(model_output_folder + "/" + cell_masks_file)
 
                 json_files[file] = data
@@ -134,27 +152,29 @@ def split_dictionary(dictionary):
         animal_number_dict[value["animal_number"]][key] = value
     return animal_number_dict
 
-workbook = xlsxwriter.Workbook("C:/Users/gator/OneDrive - University of Florida/10x images for quantification/PM NEUN FOR QUANTIFICATION/model_output_12_7_-20/Stats/quantification_excel_labeled_area_2.xlsx")
+workbook = xlsxwriter.Workbook("C:/Users/gator/OneDrive - University of Florida/10x images for quantification/PM NEUN FOR QUANTIFICATION/model_output_12_7_-20/Stats/quantification_excel_labeled_area_w_empties.xlsx")
 worksheet = workbook.add_worksheet()
 
-split_dict = split_dictionary(sorted_dict)
 row = 1
-for animal_number, images in split_dict.items():
-    worksheet.write(0, 0, "image name")
-    worksheet.write(0, 1, "cell count")
-    worksheet.write(0, 2, "animal number")
-    worksheet.write(0, 3, "slide number")
-    worksheet.write(0, 4, "column number")
-    worksheet.write(0, 5, "row number")
-    column = 6
-    for key, value in images[list(images.keys())[0]]["count_by_size"].items():
-        worksheet.write(0, column, "Diameter " + key)
-        column += 1
-    for key, value in images[list(images.keys())[0]]["count_by_section"].items():
-        worksheet.write(0, column, "Section " + key)
-        column += 1
-    for image_name, image_data in images.items():
-        worksheet.write(row, 0, image_name)
+worksheet.write(0, 0, "image name")
+worksheet.write(0, 1, "cell count")
+worksheet.write(0, 2, "animal number")
+worksheet.write(0, 3, "slide number")
+worksheet.write(0, 4, "column number")
+worksheet.write(0, 5, "row number")
+column = 6
+
+for key, value in sorted_dict[list(sorted_dict.keys())[0]]["count_by_size"].items():
+    worksheet.write(0, column, "Diameter " + key)
+    column += 1
+for key, value in sorted_dict[list(sorted_dict.keys())[0]]["count_by_section"].items():
+    worksheet.write(0, column, "Section " + key)
+    column += 1
+
+for image_name in parsed_image_names:
+    worksheet.write(row, 0, image_name)
+    if(image_name in sorted_dict.keys()):
+        image_data = sorted_dict[image_name]
         worksheet.write(row, 1, image_data["cell_count"])
         worksheet.write(row, 2, image_data["animal_number"])
         worksheet.write(row, 3, image_data["slide_number"])
@@ -167,47 +187,85 @@ for animal_number, images in split_dict.items():
         for key, value in image_data["count_by_section"].items():
             worksheet.write(row, column, value)
             column += 1
-        row += 1
+    row += 1
 
 workbook.close()
 
-from matplotlib import pyplot as plt
+
+# split_dict = split_dictionary(sorted_dict)
+# row = 1
+# for animal_number, images in split_dict.items():
+#     worksheet.write(0, 0, "image name")
+#     worksheet.write(0, 1, "cell count")
+#     worksheet.write(0, 2, "animal number")
+#     worksheet.write(0, 3, "slide number")
+#     worksheet.write(0, 4, "column number")
+#     worksheet.write(0, 5, "row number")
+#     column = 6
+#     for key, value in images[list(images.keys())[0]]["count_by_size"].items():
+#         worksheet.write(0, column, "Diameter " + key)
+#         column += 1
+#     for key, value in images[list(images.keys())[0]]["count_by_section"].items():
+#         worksheet.write(0, column, "Section " + key)
+#         column += 1
+
+#     for image_name in parsed_image_names:
+#         worksheet.write(row, 0, image_name)
+#         if(image_name in images.keys()):
+#             image_data = images[image_name]
+#             worksheet.write(row, 1, image_data["cell_count"])
+#             worksheet.write(row, 2, image_data["animal_number"])
+#             worksheet.write(row, 3, image_data["slide_number"])
+#             worksheet.write(row, 4, image_data["column_number"])
+#             worksheet.write(row, 5, image_data["row_number"])
+#             column = 6
+#             for key, value in image_data["count_by_size"].items():
+#                 worksheet.write(row, column, value)
+#                 column += 1
+#             for key, value in image_data["count_by_section"].items():
+#                 worksheet.write(row, column, value)
+#                 column += 1
+#         row += 1
+
+# workbook.close()
+
+# from matplotlib import pyplot as plt
 # Plot density of cells in split_dict here.
-for animal_number, images in split_dict.items():
-    density = []
-    count = []
-    area = []
-    for image_name, image_data in images.items():
-        density.append(image_data["density"])
-        count.append(image_data["cell_count"])
-        area.append(image_data["area"])
+# for animal_number, images in split_dict.items():
+#     density = []
+#     count = []
+#     area = []
+#     for image_name, image_data in images.items():
+#         density.append(image_data["density"])
+#         count.append(image_data["cell_count"])
+#         area.append(image_data["area"])
 
-    # Smooth out data.
-    smooth_factor = 6
-    density = [sum(density[i:i+smooth_factor])/smooth_factor for i in range(len(density)-smooth_factor-1)]
-    count = [sum(count[i:i+smooth_factor])/smooth_factor for i in range(len(count)-smooth_factor-1)]
-    area = [sum(area[i:i+smooth_factor])/smooth_factor for i in range(len(area)-smooth_factor-1)]
+#     # Smooth out data.
+#     smooth_factor = 6
+#     density = [sum(density[i:i+smooth_factor])/smooth_factor for i in range(len(density)-smooth_factor-1)]
+#     count = [sum(count[i:i+smooth_factor])/smooth_factor for i in range(len(count)-smooth_factor-1)]
+#     area = [sum(area[i:i+smooth_factor])/smooth_factor for i in range(len(area)-smooth_factor-1)]
     
 
-    # Normalize each array
-    density = [x / max(density) for x in density]
-    count = [x / max(count) for x in count]
-    area = [x / max(area) for x in area]
+#     # Normalize each array
+#     density = [x / max(density) for x in density]
+#     count = [x / max(count) for x in count]
+#     area = [x / max(area) for x in area]
 
 
-    plt.plot(count)
-    plt.plot(density)
-    plt.plot(area)
+#     plt.plot(count)
+#     plt.plot(density)
+#     plt.plot(area)
     
-    # Label the axes
-    plt.xlabel("Image Number")
-    plt.ylabel("Normalized Cell Count")
-    plt.title("Normalized Cell Count vs. Image Number for Animal " + animal_number)
-    plt.legend(["Cell Count", "Density", "Area"])
+#     # Label the axes
+#     plt.xlabel("Image Number")
+#     plt.ylabel("Normalized Cell Count")
+#     plt.title("Normalized Cell Count vs. Image Number for Animal " + animal_number)
+#     plt.legend(["Cell Count", "Density", "Area"])
 
-    # save plot to stats folder.
-    plt.savefig(stats_folder + "/animal_" + animal_number + "_cell_count_vs_image_number.png")
-    # clear plot
-    plt.clf()
+#     # save plot to stats folder.
+#     plt.savefig(stats_folder + "/animal_" + animal_number + "_cell_count_vs_image_number.png")
+#     # clear plot
+#     plt.clf()
 
     # plt.show()
